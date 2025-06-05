@@ -90,7 +90,7 @@ def scene_detect(args):
 
 def inference_video(args):
 	# GPU: Face detection, output is the list contains the face location and score in this frame
-	DET = S3FD(device='cuda')
+	DET = S3FD(device='cpu')
 	flist = glob.glob(os.path.join(args.pyframesPath, '*.jpg'))
 	flist.sort()
 	dets = []
@@ -163,16 +163,16 @@ def crop_video(args, track, cropFile):
 	vOut = cv2.VideoWriter(cropFile + 't.avi', cv2.VideoWriter_fourcc(*'XVID'), 25, (224,224))# Write video
 	dets = {'x':[], 'y':[], 's':[]}
 	for det in track['bbox']: # Read the tracks
-		dets['s'].append(max((det[3]-det[1]), (det[2]-det[0]))/2) 
-		dets['y'].append((det[1]+det[3])/2) # crop center x 
+		dets['s'].append(max((det[3]-det[1]), (det[2]-det[0]))/2)
+		dets['y'].append((det[1]+det[3])/2) # crop center x
 		dets['x'].append((det[0]+det[2])/2) # crop center y
-	dets['s'] = signal.medfilt(dets['s'], kernel_size=13)  # Smooth detections 
+	dets['s'] = signal.medfilt(dets['s'], kernel_size=13)  # Smooth detections
 	dets['x'] = signal.medfilt(dets['x'], kernel_size=13)
 	dets['y'] = signal.medfilt(dets['y'], kernel_size=13)
 	for fidx, frame in enumerate(track['frame']):
 		cs  = args.cropScale
 		bs  = dets['s'][fidx]   # Detection box size
-		bsi = int(bs * (1 + 2 * cs))  # Pad videos by this amount 
+		bsi = int(bs * (1 + 2 * cs))  # Pad videos by this amount
 		image = cv2.imread(flist[frame])
 		frame = numpy.pad(image, ((bsi,bsi), (bsi,bsi), (0, 0)), 'constant', constant_values=(110, 110))
 		my  = dets['y'][fidx] + bsi  # BBox center Y
@@ -184,7 +184,7 @@ def crop_video(args, track, cropFile):
 	audioEnd    = (track['frame'][-1]+1) / 25
 	vOut.release()
 	command = ("ffmpeg -y -i %s -async 1 -ac 1 -vn -acodec pcm_s16le -ar 16000 -threads %d -ss %.3f -to %.3f %s -loglevel panic" % \
-		      (args.audioFilePath, args.nDataLoaderThread, audioStart, audioEnd, audioTmp)) 
+		      (args.audioFilePath, args.nDataLoaderThread, audioStart, audioEnd, audioTmp))
 	output = subprocess.call(command, shell=True, stdout=None) # Crop audio file
 	_, audio = wavfile.read(audioTmp)
 	command = ("ffmpeg -y -i %st.avi -i %s -threads %d -c:v copy -c:a copy %s.avi -loglevel panic" % \
@@ -230,13 +230,14 @@ def evaluate_network(files, args):
 		audioFeature = audioFeature[:int(round(length * 100)),:]
 		videoFeature = videoFeature[:int(round(length * 25)),:,:]
 		allScore = [] # Evaluation use model
+		device = torch.device('mps') if torch.backends.mps.is_available() else 'cpu'
 		for duration in durationSet:
 			batchSize = int(math.ceil(length / duration))
 			scores = []
 			with torch.no_grad():
 				for i in range(batchSize):
-					inputA = torch.FloatTensor(audioFeature[i * duration * 100:(i+1) * duration * 100,:]).unsqueeze(0).cuda()
-					inputV = torch.FloatTensor(videoFeature[i * duration * 25: (i+1) * duration * 25,:,:]).unsqueeze(0).cuda()
+					inputA = torch.FloatTensor(audioFeature[i * duration * 100:(i+1) * duration * 100,:]).unsqueeze(0).to(device)
+					inputV = torch.FloatTensor(videoFeature[i * duration * 25: (i+1) * duration * 25,:,:]).unsqueeze(0).to(device)
 					embedA = s.model.forward_audio_frontend(inputA)
 					embedV = s.model.forward_visual_frontend(inputV)	
 					out = s.model.forward_audio_visual_backend(embedA, embedV)
