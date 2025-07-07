@@ -10,9 +10,9 @@ from model.Model import ASD_Model
 
 
 class ASD(nn.Module):
-    def __init__(self, lr = 0.001, lrDecay = 0.95, **kwargs):
+    def __init__(self, lr=0.001, lrDecay=0.95, device='mps', **kwargs):
         super(ASD, self).__init__()
-        self.device = torch.device('mps' if torch.mps.is_available() else 'cpu')
+        self.device = torch.device(device if torch.mps.is_available() else 'cpu')
         self.model = ASD_Model().to(self.device)
         self.lossAV = lossAV().to(self.device)
         self.lossV = lossV().to(self.device)
@@ -85,9 +85,9 @@ class ASD(nn.Module):
     def saveParameters(self, path):
         torch.save(self.state_dict(), path)
 
-    def loadParameters(self, path):
+    def loadParameters(self, path, weights_only=False):
         selfState = self.state_dict()
-        loadedState = torch.load(path, map_location=self.device)
+        loadedState = torch.load(path, map_location=self.device, weights_only=weights_only)
         for name, param in loadedState.items():
             origName = name;
             if name not in selfState:

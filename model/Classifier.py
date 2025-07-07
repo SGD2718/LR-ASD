@@ -21,8 +21,8 @@ class Detector(nn.Module):
     def __init__(self, channel):
         super(Detector, self).__init__()
 
-        self.gru_forward = nn.GRU(input_size = channel, hidden_size = channel//4, num_layers = 1, bidirectional = False, bias = True, batch_first = True)
-        self.gru_backward = nn.GRU(input_size = channel, hidden_size = channel//4, num_layers = 1, bidirectional = False, bias = True, batch_first = True)
+        self.gru_forward = nn.GRU(input_size=channel, hidden_size = channel//4, num_layers = 1, bidirectional = False, bias = True, batch_first = True)
+        self.gru_backward = nn.GRU(input_size=channel, hidden_size = channel//4, num_layers = 1, bidirectional = False, bias = True, batch_first = True)
         self.drop = nn.Dropout(0.5)
         self.attention = Fusion(channel//2)
         self.__init_weight()
