@@ -18,7 +18,14 @@ class ASD_Model(nn.Module):
     def forward_visual_frontend(self, x):
         B, T, W, H = x.shape
         x = x.view(B, 1, T, W, H)
-        #x = (x - 0.4161) / 0.1688
+        x = (x / 255.0 - 0.4161) / 0.1688
+        print(x)
+        x = self.visualEncoder(x)
+        return x
+
+    def forward_visual_frontend_convert(self, x):
+        B, T, W, H = x.shape
+        x = x.view(B, 1, T, W, H)
         x = self.visualEncoder(x)
         return x
 
@@ -41,7 +48,7 @@ class ASD_Model(nn.Module):
         audioEmbed = self.forward_audio_frontend(audioFeature)
         visualEmbed = self.forward_visual_frontend(visualFeature)
         outsAV = self.forward_audio_visual_backend(audioEmbed, visualEmbed)
-        #outsV = self.forward_visual_backend(visualEmbed)
+        # outsV = self.forward_visual_backend(visualEmbed)
         return outsAV
 
 

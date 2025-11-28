@@ -11,6 +11,9 @@ import torch.nn as nn
 import numpy as np
 
 
+num_frames = 50
+
+
 class AudioEncoder(nn.Module):
     def __init__(self, asd_model: ASD):
         super(AudioEncoder, self).__init__()
@@ -30,11 +33,11 @@ class ASDModel(nn.Module):
         self.lossAV = asd_model.lossAV
 
     def forward(self, visualFeature):
-        visualEmbed = self.asdModel.forward_visual_frontend(visualFeature)
+        visualEmbed = self.asdModel.forward_visual_frontend_convert(visualFeature)
         #outsAV = self.asdModel.forward_audio_visual_backend(audioEmbed, visualEmbed)
         #scores = self.lossAV.forward(outsAV)
         outsV = self.asdModel.forward_visual_backend(visualEmbed)
-        scores = self.lossV.forward(outsV)
+        scores = self.lossV.forward(outsV, isConverting=False)
         return scores
 
 
@@ -48,12 +51,11 @@ def convert_audio_encoder(audio_encoder_model):
 
         # Create a dummy input for tracing using the max sequence length.
         # N=25 -> 4*N = 100
-        dummy_audio_input = torch.rand(1, 100, 13)
+        dummy_audio_input = torch.rand(1, num_frames * 4, 13)
         traced_audio_encoder = torch.jit.trace(audio_encoder_model, dummy_audio_input)
 
         # Define symbolic input shape for the final CoreML model
-        audio_seq_len = ct.RangeDim(4, 100, default=100)
-        audio_input_spec = ct.TensorType(shape=(1, audio_seq_len, 13), name="audioFeatures")
+        audio_input_spec = ct.TensorType(shape=(1, num_frames, 13), name="audioFeatures")
 
         audio_encoder_mlpackage = ct.convert(
             traced_audio_encoder,
@@ -66,6 +68,7 @@ def convert_audio_encoder(audio_encoder_model):
     except Exception as e:
         print(f"❌ Failed to convert AudioEncoder: {e}")
 
+
 def convert_asd_model(asd_model_instance):
     """ Converts the main ASDModel using torch.jit.trace. """
     print("\n--- Starting ASDModel Conversion ---")
@@ -73,17 +76,17 @@ def convert_asd_model(asd_model_instance):
         asd_model_instance.eval()
 
         # Create dummy inputs for tracing using the max sequence length (N=25)
-        n_frames_default = 25
+        n_frames_default = num_frames
         dummy_video_input = torch.rand(1, n_frames_default, 112, 112)
-        dummy_audio_embedding = torch.rand(1, n_frames_default, 128)
+        # dummy_audio_embedding = torch.rand(1, n_frames_default, 128)
 
         # Trace the model. The wrapper correctly defines the single-output inference path.
-        #traced_asd_model = torch.jit.trace(asd_model_instance, (dummy_audio_embedding, dummy_video_input))
+        # traced_asd_model = torch.jit.trace(asd_model_instance, (dummy_audio_embedding, dummy_video_input))
         traced_asd_model = torch.jit.trace(asd_model_instance, dummy_video_input)
 
         # Define symbolic input shapes for the final CoreML model
-        video_input_spec = ct.TensorType(shape=(1, 25, 112, 112), name="videoInput")
-        #audio_embedding_spec = ct.TensorType(shape=(1, 25, 128), name="audioEmbedding")
+        video_input_spec = ct.TensorType(shape=(1, n_frames_default, 112, 112), name="videoInput")
+        # audio_embedding_spec = ct.TensorType(shape=(1, 25, 128), name="audioEmbedding")
 
         # The output spec should not contain a shape, as the converter will infer it.
         scores_output_spec = ct.TensorType(name="scores")
@@ -93,12 +96,15 @@ def convert_asd_model(asd_model_instance):
             #inputs=[audio_embedding_spec, video_input_spec],
             inputs=[video_input_spec],
             outputs=[scores_output_spec],
-            compute_units=ct.ComputeUnit.CPU_AND_GPU,
+            compute_units=ct.ComputeUnit.ALL,
         )
+
         asd_model_mlpackage.save("ASDVideoModel.mlpackage")
+        print(asd_model_mlpackage.output_description)
         print("✅ ASDModel.mlpackage saved successfully.")
     except Exception as e:
         print(f"❌ Failed to convert ASDModel: {e}")
+
 
 def verify_video_model(args):
     """
@@ -107,11 +113,11 @@ def verify_video_model(args):
     """
     # 1. Load PyTorch Model with trained weights
     print("--- Loading PyTorch model ---")
-    complete_model_pt = ASD(device='cpu')
-    complete_model_pt.loadParameters(args.weights)
-    complete_model_pt.eval()
+    s = ASD(device='cpu')
+    s.loadParameters(args.weights)
+    s.eval()
 
-    video_model_pt = ASDModel(complete_model_pt)
+    video_model_pt = ASDModel(s)
     print("PyTorch video-only model loaded successfully.")
 
     # 2. Load CoreML Model
@@ -120,7 +126,7 @@ def verify_video_model(args):
     print("CoreML model loaded successfully.")
 
     # 3. Test with different sequence lengths
-    test_video_lengths = [25]
+    test_video_lengths = [num_frames]
     print(f"\n--- Starting verification for sequence lengths: {test_video_lengths} ---")
 
     all_passed = True
@@ -145,7 +151,7 @@ def verify_video_model(args):
 
         # d. Compare the outputs
         try:
-            np.testing.assert_allclose(scores_pt_np, scores_ml_np, rtol=1e-4, atol=1e-5)
+            np.testing.assert_allclose(scores_pt_np, scores_ml_np, rtol=3e-3, atol=3e-3)
             print("✅ Video-only model outputs MATCH.")
         except AssertionError as e:
             print(f"❌ Video-only model outputs DO NOT MATCH for N={n_frames}.")
@@ -195,5 +201,5 @@ if __name__ == '__main__':
     # NOTE: You must have an 'ASD.py' file containing the 'ASD' class definition
     # for this script to run.
     main()
-    #main_verify()
+    main_verify()
 

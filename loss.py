@@ -24,11 +24,13 @@ class lossV(nn.Module):
 		self.criterion = nn.BCELoss()
 		self.FC        = nn.Linear(128, 2)
 
-	def forward(self, x, isInference=False):
+	def forward(self, x, isInference=False, isConverting=False):
 		x = x.squeeze(1)
 		x = self.FC(x)
-		predScore = x[:, 1]  # Get the score for the positive class -> shape (B, N)
-		predScore = predScore
+		if not isConverting:
+			predScore = x[:, 1]  # Get the score for the positive class -> shape (B, N)
+		else:
+			predScore = x
 		if isInference:
 			predScore = predScore.squeeze(0).detach().cpu().numpy()
 		return predScore

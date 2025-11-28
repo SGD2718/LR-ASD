@@ -10,7 +10,7 @@ from model.Model import ASD_Model
 
 
 class ASD(nn.Module):
-    def __init__(self, lr=0.001, lrDecay=0.95, device='mps', **kwargs):
+    def __init__(self, lr=0.001, lrDecay=0.95, device='cpu', **kwargs):
         super(ASD, self).__init__()
         self.device = torch.device(device if torch.mps.is_available() else 'cpu')
         self.model = ASD_Model().to(self.device)

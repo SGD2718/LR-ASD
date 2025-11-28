@@ -78,12 +78,10 @@ class visual_encoder(nn.Module):
         super(visual_encoder, self).__init__()
 
         self.block1 = Visual_Block(1, 32, 5, 3, is_down=True)
-        # Correctly use MaxPool2d directly
-        self.pool1 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.pool1 = nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
 
         self.block2 = Visual_Block(32, 64, 5, 3)
-        # Correctly use MaxPool2d directly
-        self.pool2 = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
+        self.pool2 = nn.MaxPool3d(kernel_size=(1, 3, 3), stride=(1, 2, 2), padding=(0, 1, 1))
 
         self.block3 = Visual_Block(64, 128, 5, 3)
         self.maxpool = nn.AdaptiveMaxPool2d((1, 1))
@@ -93,40 +91,18 @@ class visual_encoder(nn.Module):
         # The forward pass needs to be adjusted because MaxPool2d expects a 4D tensor
 
         x = self.block1(x)
-
-        # Reshape for 2D pooling
-        B, C, T, H, W = x.shape
-        x = x.permute(0, 2, 1, 3, 4)  # -> (B, T, C, H, W)
-        x = x.reshape(B * T, C, H, W)
-
         x = self.pool1(x)
 
-        # Reshape back to 5D for the next block
-        _, C_p, H_p, W_p = x.shape
-        x = x.view(B, T, C_p, H_p, W_p)
-        x = x.permute(0, 2, 1, 3, 4)  # -> (B, C, T, H, W)
-
         x = self.block2(x)
-
-        # Reshape for 2D pooling again
-        B, C, T, H, W = x.shape
-        x = x.permute(0, 2, 1, 3, 4)  # -> (B, T, C, H, W)
-        x = x.reshape(B * T, C, H, W)
-
         x = self.pool2(x)
 
-        # Reshape back to 5D
-        _, C_p, H_p, W_p = x.shape
-        x = x.view(B, T, C_p, H_p, W_p)
-        x = x.permute(0, 2, 1, 3, 4)  # -> (B, C, T, H, W)
-
         x = self.block3(x)
-
         x = x.transpose(1, 2)
         B, T, C, W, H = x.shape
         x = x.reshape(B * T, C, W, H)
 
         x = self.maxpool(x)
+
         x = x.view(B, T, C)
 
         return x

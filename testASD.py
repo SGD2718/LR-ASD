@@ -163,8 +163,7 @@ def main():
     parser.add_argument('--gif-path', type=str, required=True, help='Path to the input GIF file.')
     args = parser.parse_args()
     run_inference_on_gif(args)
-    #run_inference_on_tensor(test_input, args)
-
+    # run_inference_on_tensor(test_input, args)
 
 
 if __name__ == '__main__':
